@@ -1,98 +1,38 @@
-## Load the dependencies
+library(dplyr)
 
-library("dplyr")
-library("reshape2")
-
-## The main data directory
-
+#Directory files
 dir <- "UCI HAR Dataset"
 
-## Loads a file
+#Read all the files with data
+xtest <- read.table(paste(dir,"test/X_test.txt"))
+ytest <- read.table(paste(dir,"test/y_test.txt"))
+subjecttest <- read.table(paste(dir,"test/subject_test.txt"))
+xtrain <- read.table(paste(dir,"train/X_train.txt"))
+ytrain <- read.table(paste(dir,"train/y_train.txt"))
+subjecttrain <- read.table(paste(dir,"train/subject_train.txt"))
+features <- read.table(paste(dir,"features.txt"))
+labels <- read.table(paste(dir,"activity_labels.txt"))
 
-load_file <- function(filename, ...) {
-  file.path(..., filename) %>%
-  read.table(header = FALSE)
-}
+#Merge the train with the test sets
+traindata <- cbind(subjecttrain, ytrain, xtrain)
+testdata <- cbind(subjecttest, ytest, xtest)
+totaldata <- rbind(testdata, traindata)
+colnames(totaldata) <- c("subject", "activity", features[, 2])
 
-## Loads a training file
+#Measurements on the mean and standard deviation
 
-load_train_file <- function(filename) {
-  load_file(filename, dir, "train")
-}
+selection<-select(matches("mean|std"),one_of("subject","activity"))
 
-## Loads a test file
+data <- totaldata[, selection]
 
-load_test_file <- function(filename) {
-  load_file(filename, dir, "test")
-}
+#Uses descriptive activity names 
+data[, 2] <- as.factor(data[, 2])
+levels(data[, 2]) <- tolower(labels[, 2])
 
-## Uses list of activity values d4escribing the test or training labels
+colnames(data) <- gsub("[^a-zA-Z\\d_]", "", colnames)
+data <- tbl_df(data)
+data <- group_by(data, subject, activity)
+tidy_data <- summarize_all(data, mean)
 
-describe_lbl_ds <- function(ds) {
-  names(ds) <- activity_col  
-  ds$Activity <- factor(ds$Activity, levels = activity_lbl$V1, labels = activity_lbl$V2)
-  ds
-}
-
-## Takes a dataset capturing results of feature tests and associates columns with individual features
-
-describe_act_ds <- function(ds) {
-  col_names <- gsub("-", "_", features$V2)
-  col_names <- gsub("[^a-zA-Z\\d_]", "", col_names)
-  names(ds) <- make.names(names = col_names, unique = TRUE, allow_ = TRUE)
-  ds
-}
-
-## Adjusts column name in the data set identifying test participants
-
-describe_sub_ds <- function(ds) {
-  names(ds) <- subject_col
-  ds
-}
-}
-
-## Columns
-
-subject_col <- "Subject"
-activity_col <- "Activity"
-
-## Load features 
-
-features <- load_file("features.txt", dir)
-
-## Load activity labels
-
-activity_lbl <- load_file("activity_labels.txt", dir)
-
-## Use descriptive activity names to name the activities in the data set
-
-train_set <- load_train_file("X_train.txt") %>% describe_act_ds
-train_lbl <- load_train_file("y_train.txt") %>% describe_lbl_ds
-train_sub <- load_train_file("subject_train.txt") %>% describe_sub_ds
-test_set <- load_test_file("X_test.txt") %>% describe_act_ds
-test_lbl <- load_test_file("y_test.txt") %>% describe_lbl_ds
-test_sub <- load_test_file("subject_test.txt") %>% describe_sub_ds
-
-## Merge the training and the test sets to create one dataset
-
-merge_data <- rbind(
-                cbind(train_set, train_lbl, train_sub),
-                cbind(test_set, test_lbl, test_sub)
-              ) %>%
-              select(
-                matches("mean|std"), 
-                one_of(subject_col, activity_col)
-              )
-
-## Create a second, independent tidy data set with the average of each variable for each activity and each subject
-
-id_cols <- c(subject_col, activity_col)
-tidy_data <- melt(
-               merge_data, 
-               id = id_cols, 
-               measure.vars = setdiff(colnames(merge_data), id_cols)
-             ) %>%
-             dcast(Subject + Activity ~ variable, mean)
-             
-## Save the result
-write.table(tidy_data, file = "tidy_data.txt", sep = ",", row.names = FALSE)
+#Final results  in tidy_data.txt
+write.table(tidy_data, file = "tidy_dataset.txt", row.names = FALSE)
